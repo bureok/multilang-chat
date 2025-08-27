@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다국어 채팅룸</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .setup-form {
+            padding: 30px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .chat-container {
+            display: none;
+            height: 600px;
+            flex-direction: row;
+        }
+
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .message.own {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.other {
+            background: white;
+            border: 2px solid #e0e0e0;
+        }
+
+        .message.system {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            text-align: center;
+            margin: 10px auto;
+            max-width: 90%;
+        }
+
+        .message-info {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .message-text {
+            font-size: 1em;
+            line-height: 1.4;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 2px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .send-btn {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        /* 사이드바 스타일 */
+        .sidebar {
+            width: 280px;
+            background: #f8f9fa;
+            border-left: 2px solid #e0e0e0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .sidebar-header h3 {
+            color: #333;
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+
+        .online-count {
+            color: #28a745;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .user-list {
+            list-style: none;
+        }
+
+        .user-item {
+            background: white;
+            margin-bottom: 10px;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .user-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .user-nickname {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .user-language {
+            font-size: 0.9em;
+            color: #666;
+            padding: 4px 8px;
+            background: #e9ecef;
+            border-radius: 15px;
+            display: inline-block;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                width: 95%;
+                margin: 10px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+
+            .chat-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-left: none;
+                border-top: 2px solid #e0e0e0;
+                max-height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 다국어 채팅룸</h1>
+            <p>한국어, 영어, 일본어로 소통하는 글로벌 채팅</p>
+        </div>
+
+        <!-- 초기 설정 화면 -->
+        <div id="setupForm" class="setup-form">
+            <div class="form-group">
+                <label for="nickname">닉네임</label>
+                <input type="text" id="nickname" placeholder="사용할 닉네임을 입력하세요" maxlength="20" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="language">사용 언어</label>
+                <select id="language" required>
+                    <option value="">언어를 선택하세요</option>
+                    <option value="korean">한국어 (Korean)</option>
+                    <option value="english">영어 (English)</option>
+                    <option value="japanese">일본어 (Japanese)</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="joinChat()">채팅 시작하기</button>
+        </div>
+
+        <!-- 채팅 화면 -->
+        <div id="chatContainer" class="chat-container">
+            <div class="chat-main">
+                <div class="user-info">
+                    <strong id="userInfoDisplay"></strong>
+                </div>
+                
+                <div id="chatMessages" class="chat-messages">
+                    <!-- 메시지들이 여기에 표시됩니다 -->
+                </div>
+                
+                <div class="chat-input-container">
+                    <input type="text" id="messageInput" class="chat-input" placeholder="메시지를 입력하세요..." maxlength="500">
+                    <button class="send-btn" onclick="sendMessage()">전송</button>
+                </div>
+            </div>
+
+            <!-- 사이드바 -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3>👥 접속 인원</h3>
+                    <div class="online-count" id="onlineCount">0명</div>
+                </div>
+                <ul class="user-list" id="userList">
+                    <!-- 사용자 목록이 여기에 표시됩니다 -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentUser = null;
+        let heartbeatInterval = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        // 언어 이름 매핑
+        const languageNames = {
+            'korean': '한국어',
+            'english': 'English', 
+            'japanese': '日本語'
+        };
+
+        function startHeartbeat() {
+            // 기존 heartbeat 중지
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+            
+            // 10초마다 heartbeat 전송
+            heartbeatInterval = setInterval(() => {
+                if (socket.connected) {
+                    socket.emit('heartbeat');
+                }
+            }, 10000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function updateUserList(users) {
+            const userList = document.getElementById('userList');
+            const onlineCount = document.getElementById('onlineCount');
+            
+            // 사용자 목록 업데이트
+            userList.innerHTML = '';
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.className = 'user-item';
+                li.innerHTML = `
+                    <div class="user-nickname">${user.nickname}</div>
+                    <div class="user-language">${user.language}</div>
+                `;
+                userList.appendChild(li);
+            });
+            
+            // 접속 인원 수 업데이트
+            onlineCount.textContent = `${users.length}명`;
+        }
+
+        function joinChat() {
+            const nickname = document.getElementById('nickname').value.trim();
+            const language = document.getElementById('language').value;
+            
+            if (!nickname) {
+                alert('닉네임을 입력해주세요.');
+                return;
+            }
+            
+            if (!language) {
+                alert('언어를 선택해주세요.');
+                return;
+            }
+            
+            currentUser = { nickname, language };
+            
+            // 서버에 사용자 정보 전송
+            socket.emit('set_user_info', { nickname, language });
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            
+            socket.emit('send_message', { message });
+            messageInput.value = '';
+        }
+
+        function addMessage(data, type = 'other') {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            if (type === 'system') {
+                messageDiv.innerHTML = `<div class="message-text">${data.message}</div>`;
+            } else {
+                const timeStr = new Date().toLocaleTimeString();
+                let messageHtml = '';
+                
+                if (type === 'own') {
+                    messageHtml = `
+                        <div class="message-info">나 • ${timeStr}</div>
+                        <div class="message-text">${data.message}</div>
+                    `;
+                } else {
+                    messageHtml = `
+                        <div class="message-info">${data.nickname} (${data.original_language}) • ${timeStr}</div>
+                        <div class="message-text">${data.message}</div>
+                    `;
+                }
+                
+                messageDiv.innerHTML = messageHtml;
+            }
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // 소켓 이벤트 리스너
+        socket.on('connect', function() {
+            console.log('소켓 연결됨');
+            reconnectAttempts = 0;
+            startHeartbeat();
+        });
+
+        socket.on('disconnect', function() {
+            console.log('소켓 연결 해제됨');
+            stopHeartbeat();
+            
+            // 재연결 시도
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                console.log(`재연결 시도 ${reconnectAttempts}/${maxReconnectAttempts}`);
+                setTimeout(() => {
+                    socket.connect();
+                }, 2000 * reconnectAttempts);
+            }
+        });
+
+        socket.on('user_info_set', function(data) {
+            console.log('user_info_set 이벤트 받음:', data);
+            if (data.success) {
+                console.log('채팅 화면으로 전환');
+                document.getElementById('setupForm').style.display = 'none';
+                document.getElementById('chatContainer').style.display = 'flex';
+                
+                const userInfo = `${currentUser.nickname} (${languageNames[currentUser.language]})`;
+                document.getElementById('userInfoDisplay').textContent = userInfo;
+                
+                addMessage({ message: '채팅방에 입장했습니다. 즐거운 대화 나누세요!' }, 'system');
+            }
+        });
+
+        socket.on('receive_message', function(data) {
+            const messageType = data.is_own_message ? 'own' : 'other';
+            addMessage(data, messageType);
+        });
+
+        socket.on('user_joined', function(data) {
+            addMessage(data, 'system');
+        });
+
+        socket.on('user_left', function(data) {
+            addMessage(data, 'system');
+        });
+
+        socket.on('user_list_update', function(data) {
+            updateUserList(data.users);
+        });
+
+        socket.on('heartbeat_ack', function(data) {
+            console.log('Heartbeat 응답 받음:', data.timestamp);
+        });
+
+        // 엔터 키로 메시지 전송
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 닉네임 입력란에서 엔터 키로 채팅 시작
+        document.getElementById('nickname').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinChat();
+            }
+        });
+
+        // 페이지 언로드 시 heartbeat 중지
+        window.addEventListener('beforeunload', function() {
+            stopHeartbeat();
+        });
+    </script>
+</body>
+</html>
